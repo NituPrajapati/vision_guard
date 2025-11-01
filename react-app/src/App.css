@@ -1,0 +1,7 @@
+@import "tailwindcss";
+*{
+  font-family: Sleek, high-tech;
+}
+.logo{
+  font-family: 'Orbitron', sans-serif;
+}
