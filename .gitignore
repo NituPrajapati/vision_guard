@@ -14,7 +14,7 @@ dist/
 build/
 *.egg
 .pytest_cache/
-config.py
+
 
 # Node
 node_modules/

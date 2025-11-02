@@ -30,8 +30,22 @@ class Config:
     IDCARD_MODEL_PATH = "runs/detect/train3/weights/best.pt"
     COCO_MODEL_PATH = "yolov8n.pt"
     
-    # Result folder
+    # Temporary processing folder (files are cleaned up after Cloudinary upload)
+    # Only used for: 1) Temporary file processing, 2) Live detection stream
     RESULT_FOLDER = "results"
+
+    # Cloudinary settings - required from environment
+    CLOUDINARY_CLOUD_NAME = os.getenv("CLOUDINARY_CLOUD_NAME")
+    if not CLOUDINARY_CLOUD_NAME:
+        raise ValueError("CLOUDINARY_CLOUD_NAME environment variable is required")
+    
+    CLOUDINARY_API_KEY = os.getenv("CLOUDINARY_API_KEY")
+    if not CLOUDINARY_API_KEY:
+        raise ValueError("CLOUDINARY_API_KEY environment variable is required")
+    
+    CLOUDINARY_API_SECRET = os.getenv("CLOUDINARY_API_SECRET")
+    if not CLOUDINARY_API_SECRET:
+        raise ValueError("CLOUDINARY_API_SECRET environment variable is required")
 
     # Google OAuth URIs (standard endpoints, safe to have defaults)
     GOOGLE_AUTH_URI = os.getenv("GOOGLE_AUTH_URI", "https://accounts.google.com/o/oauth2/auth")

@@ -45,16 +45,28 @@ export default function HistoryModal({ onClose }) {
     }
   };
 
-  const getImageUrl = (resultPath) => {
-    if (!resultPath) return "";
-    // If the path already starts with http, return as is
-    if (resultPath.startsWith("http")) return resultPath;
-    // If it starts with /, use it as is (proxy will handle it)
-    if (resultPath.startsWith("/")) {
-      return resultPath;
+  const getImageUrl = (resultUrl, resultPath) => {
+    // Prefer result_url (Cloudinary) over result_path (local fallback)
+    const url = resultUrl || resultPath;
+    if (!url) return "";
+    
+    // If it's already a full URL (Cloudinary), use it directly
+    if (url.startsWith("http://") || url.startsWith("https://")) {
+      return url;
     }
-    // Otherwise, prepend with / to go through proxy
-    return `/${resultPath}`;
+    
+    // If it starts with /results/, it's a backend static file path
+    if (url.startsWith("/results/")) {
+      return `http://localhost:5000${url}`;
+    }
+    
+    // If it starts with /, prepend backend URL
+    if (url.startsWith("/")) {
+      return `http://localhost:5000${url}`;
+    }
+    
+    // Otherwise, prepend backend URL
+    return `http://localhost:5000/${url}`;
   };
 
   const handleDeleteAll = async () => {
@@ -209,7 +221,7 @@ export default function HistoryModal({ onClose }) {
                     <div className="bg-gray-100 rounded-lg overflow-hidden">
                       {isVideo ? (
                         <video
-                          src={getImageUrl(h.result_path)}
+                          src={getImageUrl(h.result_url, h.result_path)}
                           controls
                           className="w-full h-auto max-h-80 object-contain rounded-lg"
                           preload="metadata"
@@ -218,10 +230,11 @@ export default function HistoryModal({ onClose }) {
                         </video>
                       ) : (
                         <img
-                          src={getImageUrl(h.result_path)}
+                          src={getImageUrl(h.result_url, h.result_path)}
                           alt={`Detection result for ${h.filename}`}
                           className="w-full h-auto max-h-80 object-contain rounded-lg"
                           onError={(e) => {
+                            console.error("Failed to load image:", h.result_url || h.result_path);
                             e.target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300'%3E%3Crect fill='%23ddd' width='400' height='300'/%3E%3Ctext fill='%23999' font-family='sans-serif' font-size='18' dy='10.5' font-weight='bold' x='50%25' y='50%25' text-anchor='middle'%3EImage not found%3C/text%3E%3C/svg%3E";
                           }}
                         />

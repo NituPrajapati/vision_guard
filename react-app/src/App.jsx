@@ -79,13 +79,19 @@ function App() {
       const res = await axios.post("http://localhost:5000/detect", formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
-      // Store both paths and types (image/video)
-      setResultUrls(res.data.result_paths.map(path => ({
-        path,
-        type: res.data.type || 'image'
+      // Handle response - backend returns result_urls (Cloudinary URLs) or result_paths (local fallback)
+      const urls = res.data.result_urls || res.data.result_paths || [];
+      const detectionType = res.data.type || 'image';
+      
+      // Store URLs with type information
+      setResultUrls(urls.map(url => ({
+        path: url,
+        type: detectionType
       })));
     } catch (err) {
       console.error(err);
+      setToast(err.response?.data?.detail || 'Detection failed');
+      setTimeout(() => setToast(''), 3000);
     }
     setLoading(false);
     // Reset file input
@@ -212,43 +218,59 @@ const handleStopLive = async () => {
         </div>
 
         {/* Results */}
-        <div className="flex flex-wrap justify-center mt-6">
+        <div className="flex flex-col items-center mt-6">
           {loading && (
-            <div className="text-center">
+            <div className="text-center mb-6 w-full">
               <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-pink-500 mb-2"></div>
               <p className="text-white text-lg">Processing...</p>
             </div>
           )}
-          {isLive && (
-          <img
-            src="http://localhost:5000/live/stream"
-            alt="Live Detection Stream"
-            className="w-1/2 rounded-xl shadow-xl m-2"
-          />
-          )}
-          {resultUrls.map((item, index) => {
-            const url = typeof item === 'string' ? item : item.path;
-            const type = typeof item === 'string' ? 'image' : (item.type || 'image');
-            const fullUrl = url.startsWith('http') ? url : `http://localhost:5000/${url}`;
+          <div className="flex flex-wrap justify-center gap-4">
+            {isLive && (
+            <img
+              src="http://localhost:5000/live/stream"
+              alt="Live Detection Stream"
+              className="w-1/2 rounded-xl shadow-xl m-2"
+            />
+            )}
+            {resultUrls.map((item, index) => {
+              const url = typeof item === 'string' ? item : item.path;
+              const type = typeof item === 'string' ? 'image' : (item.type || 'image');
+              // If URL is already a full URL (Cloudinary), use it directly
+              // If it starts with /results/, it's a backend path - use backend URL
+              // Otherwise, assume it's a relative path and prepend backend URL
+              let fullUrl = '';
+              if (url) {
+                if (url.startsWith('http://') || url.startsWith('https://')) {
+                  fullUrl = url; // Full Cloudinary URL
+                } else if (url.startsWith('/results/')) {
+                  fullUrl = `http://localhost:5000${url}`; // Backend static file path
+                } else {
+                  fullUrl = `http://localhost:5000/${url.startsWith('/') ? url.slice(1) : url}`;
+                }
+              }
             
-            return type === 'video' ? (
-              <video
-                key={index}
-                src={fullUrl}
-                controls
-                className="max-w-md w-1/3 rounded-xl shadow-xl m-2"
-              >
-                Your browser does not support the video tag.
-              </video>
-            ) : (
-              <img
-                key={index}
-                src={fullUrl}
-                alt="Detection Result"
-                className="max-w-md w-1/3 rounded-xl shadow-xl m-2"
-              />
-            );
-          })}
+              return fullUrl ? (
+                type === 'video' ? (
+                  <video
+                    key={index}
+                    src={fullUrl}
+                    controls
+                    className="max-w-xl w-1/2 rounded-xl shadow-xl m-2"
+                  >
+                    Your browser does not support the video tag.
+                  </video>
+                ) : (
+                  <img
+                    key={index}
+                    src={fullUrl}
+                    alt="Detection Result"
+                    className="max-w-xl w-1/2 rounded-xl shadow-xl m-2"
+                  />
+                )
+              ) : null;
+            })}
+          </div>
         </div>
 
         <footer className="text-center mt-10 p-4 bg-[#4a5151] text-white text-sm tracking-wide">
