@@ -40,7 +40,6 @@ yarn-error.log*
 .DS_Store
 
 # Project specific
-backend/results/
 backend/uploads/
 backend/dataset/labels/*.cache
 backend/__pycache__/
@@ -67,5 +66,4 @@ id_card_images/
 dataset/
 labels/
 share/
-
-
+runs/
