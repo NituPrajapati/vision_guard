@@ -24,10 +24,11 @@ function App() {
 
   // Send cookies with every request
   axios.defaults.withCredentials = true;
+  axios.defaults.baseURL = API_URL;
 
   const fetchUser = async () => {
     try {
-      const res = await axios.get(`${API_BASE_URL}/auth/user`, { withCredentials: true });
+      const res = await axios.get(`${API_URL}/auth/user`, { withCredentials: true });
       if (res.data?.username) {
         setUser({ name: res.data.username });
       } else {

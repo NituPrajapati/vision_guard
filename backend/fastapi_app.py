@@ -48,7 +48,9 @@ allowed_origins = [origin.strip() for origin in allowed_origins]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed_origins,
+    allow_origins=[
+        "https://vision-guard-1.onrender.com/",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
