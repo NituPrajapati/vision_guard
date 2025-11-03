@@ -27,7 +27,7 @@ function App() {
 
   const fetchUser = async () => {
     try {
-      const res = await axios.get("/auth/user", { withCredentials: true });
+      const res = await axios.get(`${API_BASE_URL}/auth/user`, { withCredentials: true });
       if (res.data?.username) {
         setUser({ name: res.data.username });
       } else {
