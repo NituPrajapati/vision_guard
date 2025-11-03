@@ -60,6 +60,10 @@ app.add_middleware(SessionMiddleware, secret_key=Config.JWT_SECRET_KEY)
 # All other processed files are uploaded to Cloudinary and local files are cleaned up
 app.mount("/results", StaticFiles(directory=Config.RESULT_FOLDER), name="results")
 
+@app.get("/")
+def root():
+    return {"message": "Vision Guard backend is running 🚀"}
+
 @app.get("/health")
 def health():
     return JSONResponse({"status": "ok"})

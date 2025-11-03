@@ -8,6 +8,9 @@ import LoginModal from "./components/LoginModal";
 import RegisterModal from "./components/RegisterModal";
 import HistoryModal from "./components/HistoryModal";
 
+// Get API URL from environment variable
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
 function App() {
   const [resultUrls, setResultUrls] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -76,7 +79,7 @@ function App() {
 
     setLoading(true);
     try {
-      const res = await axios.post("http://localhost:5000/detect", formData, {
+      const res = await axios.post(`${API_URL}/detect`, formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
       // Handle response - backend returns result_urls (Cloudinary URLs) or result_paths (local fallback)
@@ -102,7 +105,7 @@ function App() {
   const handleLiveDetection = async () => {
   setLoading(true);
   try {
-    await axios.post("http://localhost:5000/live/start", { cam_index: 0 });
+    await axios.post(`${API_URL}/live/start`, { cam_index: 0 });
     setIsLive(true);   // show the live stream
   } catch (err) {
     console.error(err);
@@ -112,7 +115,7 @@ function App() {
 
 const handleStopLive = async () => {
   try {
-    await axios.post("http://localhost:5000/live/stop");
+    await axios.post(`${API_URL}/live/stop`);
     setIsLive(false);  // hide the live stream
   } catch (err) {
     console.error(err);
@@ -228,7 +231,7 @@ const handleStopLive = async () => {
           <div className="flex flex-wrap justify-center gap-4">
             {isLive && (
             <img
-              src="http://localhost:5000/live/stream"
+              src={`${API_URL}/live/stream`}
               alt="Live Detection Stream"
               className="w-1/2 rounded-xl shadow-xl m-2"
             />
@@ -244,9 +247,9 @@ const handleStopLive = async () => {
                 if (url.startsWith('http://') || url.startsWith('https://')) {
                   fullUrl = url; // Full Cloudinary URL
                 } else if (url.startsWith('/results/')) {
-                  fullUrl = `http://localhost:5000${url}`; // Backend static file path
+                  fullUrl = `${API_URL}${url}`; // Backend static file path
                 } else {
-                  fullUrl = `http://localhost:5000/${url.startsWith('/') ? url.slice(1) : url}`;
+                  fullUrl = `${API_URL}/${url.startsWith('/') ? url.slice(1) : url}`;
                 }
               }
             
@@ -286,7 +289,7 @@ export function Login({ setToken }) {
   const [password, setPassword] = useState('');
   const handleSubmit = async e => {
     e.preventDefault();
-    const res = await axios.post('http://localhost:5000/api/login', {username, password});
+    const res = await axios.post(`${API_URL}/api/login`, {username, password});
     setToken(res.data.token);
   };
   return (

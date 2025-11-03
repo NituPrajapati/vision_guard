@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import axios from "axios";
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000";
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 export default function RegisterModal({ onClose, onSuccess }) {
   const [username, setUsername] = useState("");
@@ -34,7 +34,7 @@ export default function RegisterModal({ onClose, onSuccess }) {
 
   const handleGoogle = async () => {
     try {
-      const res = await axios.get("http://localhost:5000/auth/google/login");
+      const res = await axios.get(`${API_URL}/auth/google/login`);
       const url = res.data.auth_url;
       if (url) window.location.href = url;
     } catch (err) {
@@ -92,7 +92,7 @@ export default function RegisterModal({ onClose, onSuccess }) {
           </button>
           <button
             type="button"
-            onClick={() => { window.location.href = `${API_BASE}/auth/google/login?redirect=1`; }}
+            onClick={() => { window.location.href = `${API_URL}/auth/google/login?redirect=1`; }}
             className="border border-gray-300 text-gray-700 rounded-lg py-2 hover:bg-gray-100"
           >
             Continue with Google

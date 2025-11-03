@@ -46,6 +46,9 @@ export default function HistoryModal({ onClose }) {
   };
 
   const getImageUrl = (resultUrl, resultPath) => {
+    // Get API URL from environment variable
+    const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+    
     // Prefer result_url (Cloudinary) over result_path (local fallback)
     const url = resultUrl || resultPath;
     if (!url) return "";
@@ -57,16 +60,16 @@ export default function HistoryModal({ onClose }) {
     
     // If it starts with /results/, it's a backend static file path
     if (url.startsWith("/results/")) {
-      return `http://localhost:5000${url}`;
+      return `${API_URL}${url}`;
     }
     
     // If it starts with /, prepend backend URL
     if (url.startsWith("/")) {
-      return `http://localhost:5000${url}`;
+      return `${API_URL}${url}`;
     }
     
     // Otherwise, prepend backend URL
-    return `http://localhost:5000/${url}`;
+    return `${API_URL}/${url}`;
   };
 
   const handleDeleteAll = async () => {
