@@ -50,6 +50,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "https://vision-guard-1.onrender.com",
+        "https://visionguard-delta.vercel.app",
     ],
     allow_credentials=True,
     allow_methods=["*"],
