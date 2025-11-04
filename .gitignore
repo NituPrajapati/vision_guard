@@ -67,3 +67,5 @@ dataset/
 labels/
 share/
 runs/
+.dockerignore
+Dockerfile
