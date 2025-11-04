@@ -49,8 +49,8 @@ allowed_origins = [origin.strip() for origin in allowed_origins]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://vision-guard-1.onrender.com",
         "https://visionguard-delta.vercel.app",
+        "http://localhost:5173"
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -477,8 +477,8 @@ def register(req: RegisterRequest, response: Response):
         key="username",
         value=req.email,
         httponly=True,
-        samesite="lax",
-        secure=False,
+        samesite="none",
+        secure=True,
     )
     logger.info(f"[REGISTER] Username cookie set: {req.email}")
     return {"msg": "Registered successfully"}
@@ -505,8 +505,8 @@ def login(req: LoginRequest, response: Response):
         key="username",
         value=user.get("email"),
         httponly=True,
-        samesite="lax",
-        secure=False,
+        samesite="none",
+        secure=True,
     )
     logger.info(f"[LOGIN] Username cookie set: {user.get('email')}")
     return {"msg": "Login successful"}
@@ -541,7 +541,7 @@ def logout(response: Response):
     response.delete_cookie(
         key="username",
         path="/",
-        samesite="lax"
+        samesite="none"
     )
     logger.info(f"[LOGOUT] Username cookie cleared successfully")
     return {"msg": "Logged out successfully"}
@@ -834,7 +834,7 @@ async def google_callback(request: Request):
     # Step 2g: Set cookie with email (username) and redirect
     try:
         logger.info(f"[GOOGLE CALLBACK] Step 5: Setting cookie and redirecting...")
-        logger.info(f"[GOOGLE CALLBACK] Cookie settings: httponly=True, secure=False, samesite=lax")
+        logger.info(f"[GOOGLE CALLBACK] Cookie settings: httponly=True, secure=True, samesite=none")
         logger.info(f"[GOOGLE CALLBACK] Setting username cookie with value: {email}")
         logger.info(f"[GOOGLE CALLBACK] Redirecting to: {Config.FRONTEND_BASE}")
         
@@ -843,8 +843,8 @@ async def google_callback(request: Request):
             key="username",
             value=email,
             httponly=True,
-            samesite="lax",
-            secure=False,
+            samesite="none",
+            secure=True,
         )
         
         logger.info(f"[GOOGLE CALLBACK] Step 5: Cookie set successfully")
