@@ -25,8 +25,9 @@ export default function HistoryModal({ onClose }) {
       .finally(() => setLoading(false));
   }, []);
 
-  const downloadResult = async (downloadId, filename) => {
+  const downloadResult = async (downloadId, filename, resultUrl, resultPath) => {
     try {
+      // Use backend endpoint which handles both Cloudinary and local files
       const response = await axios.get(`/download/${downloadId}`, {
         responseType: 'blob',
         withCredentials: true
@@ -35,13 +36,18 @@ export default function HistoryModal({ onClose }) {
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `detected_${filename}`);
+      
+      // Use filename from response or fallback
+      const downloadFilename = filename || 'result';
+      link.setAttribute('download', `detected_${downloadFilename}`);
       document.body.appendChild(link);
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
     } catch (err) {
-      alert("Download failed");
+      console.error("Download error:", err);
+      const errorMsg = err.response?.data?.detail || err.message || 'Unknown error';
+      alert(`Download failed: ${errorMsg}`);
     }
   };
 
@@ -111,10 +117,11 @@ export default function HistoryModal({ onClose }) {
 
   return (
     <div 
-      className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-black bg-opacity-60 z-[100] overflow-y-auto"
       onClick={handleBackdropClick}
     >
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col relative">
+      <div className="min-h-full flex items-center justify-center p-4 py-8">
+        <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col relative">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200 sticky top-0 bg-white rounded-t-xl z-10">
           <h2 className="text-2xl font-bold text-gray-800">Detection History</h2>
@@ -178,7 +185,7 @@ export default function HistoryModal({ onClose }) {
                       {/* Download Button */}
                       <button
                         title="Download"
-                        onClick={() => downloadResult(h.download_id, h.filename)}
+                        onClick={() => downloadResult(h.download_id, h.filename, h.result_url, h.result_path)}
                         className="p-2 rounded-full bg-pink-500 text-white shadow-md hover:bg-pink-600 transition-colors"
                       >
                         <FaDownload size={16} />
@@ -249,13 +256,13 @@ export default function HistoryModal({ onClose }) {
             </div>
           )}
         </div>
-
+      </div>
       </div>
 
       {/* Confirmation Dialog for Delete All */}
       {showDeleteConfirm && (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[60]">
-          <div className="bg-white rounded-xl shadow-2xl p-6 max-w-md w-full mx-4">
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[110] p-4">
+          <div className="bg-white rounded-xl shadow-2xl p-6 max-w-md w-full mx-4 my-4">
             <h3 className="text-xl font-bold text-gray-800 mb-2">Delete All History?</h3>
             <p className="text-gray-600 mb-6">
               Are you sure you want to delete all your detection history? This action cannot be undone.
@@ -292,8 +299,8 @@ export default function HistoryModal({ onClose }) {
 
       {/* Confirmation Dialog for Delete Single Item */}
       {showDeleteItemConfirm && (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[60]">
-          <div className="bg-white rounded-xl shadow-2xl p-6 max-w-md w-full mx-4">
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[110] p-4">
+          <div className="bg-white rounded-xl shadow-2xl p-6 max-w-md w-full mx-4 my-4">
             <h3 className="text-xl font-bold text-gray-800 mb-2">Delete This Item?</h3>
             <p className="text-gray-600 mb-6">
               Are you sure you want to delete this detection? This action cannot be undone.

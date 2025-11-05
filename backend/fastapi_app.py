@@ -570,7 +570,7 @@ from fastapi.responses import FileResponse
 
 @app.get("/download/{doc_id}")
 def download_result(doc_id: str, request: Request):
-    """Download or redirect to detection result from Cloudinary"""
+    """Download detection result from Cloudinary or local file"""
     user = get_user_info_from_cookie(request)
     if not user or not user.get("email"):
         raise HTTPException(status_code=401, detail="Unauthorized")
@@ -584,15 +584,55 @@ def download_result(doc_id: str, request: Request):
     
     # Prefer Cloudinary URL, fallback to local file for backward compatibility
     result_url = doc.get("result_url")
+    filename = doc.get("filename", "result")
+    
     if result_url:
-        # Redirect to Cloudinary URL
-        return RedirectResponse(url=result_url)
+        # Fetch and proxy Cloudinary file
+        try:
+            response = requests.get(result_url, stream=True, timeout=30)
+            response.raise_for_status()
+            
+            # Determine content type from response headers or URL
+            content_type = response.headers.get("Content-Type", "application/octet-stream")
+            
+            # Extract file extension from filename or URL
+            if filename and "." in filename:
+                file_ext = filename.split(".")[-1]
+            elif "." in result_url:
+                file_ext = result_url.split(".")[-1].split("?")[0]
+            else:
+                file_ext = "jpg"
+            
+            # Determine content type from extension if not provided
+            if content_type == "application/octet-stream":
+                if file_ext.lower() in ["jpg", "jpeg"]:
+                    content_type = "image/jpeg"
+                elif file_ext.lower() == "png":
+                    content_type = "image/png"
+                elif file_ext.lower() in ["mp4", "avi", "mov"]:
+                    content_type = "video/mp4"
+            
+            def generate():
+                for chunk in response.iter_content(chunk_size=8192):
+                    if chunk:
+                        yield chunk
+            
+            return StreamingResponse(
+                generate(),
+                media_type=content_type,
+                headers={
+                    "Content-Disposition": f'attachment; filename="detected_{filename}"'
+                }
+            )
+        except Exception as e:
+            logging.error(f"Failed to fetch from Cloudinary: {e}")
+            raise HTTPException(status_code=500, detail=f"Failed to download file: {str(e)}")
     else:
         # Fallback to local file (backward compatibility)
         path = doc.get("result_path")
         if not path or not os.path.exists(path):
             raise HTTPException(status_code=404, detail="File missing")
-        return FileResponse(path, filename=f"detected_{doc.get('filename','result')}")
+        return FileResponse(path, filename=f"detected_{filename}")
 
 
 @app.delete("/history/{doc_id}")

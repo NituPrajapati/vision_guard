@@ -43,8 +43,9 @@ export default function RegisterModal({ onClose, onSuccess }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-2xl shadow-2xl p-6 w-[420px] relative">
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-[100] overflow-y-auto">
+      <div className="min-h-full flex items-center justify-center p-4 py-8">
+        <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-[420px] relative">
         <h2 className="text-2xl font-semibold mb-5 text-gray-900">Register</h2>
         {error && <div className="mb-3 text-sm text-red-600">{error}</div>}
         <form onSubmit={handleRegister} className="flex flex-col gap-3">
@@ -104,6 +105,7 @@ export default function RegisterModal({ onClose, onSuccess }) {
         >
           ✖
         </button>
+      </div>
       </div>
     </div>
   );
