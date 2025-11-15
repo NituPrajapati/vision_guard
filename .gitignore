@@ -69,3 +69,7 @@ share/
 runs/
 .dockerignore
 Dockerfile
+backend/runs/detect/train3/train_batch2.jpg
+backend/runs/detect/train3/train_batch450.jpg
+backend/runs/detect/train3/train_batch451.jpg
+backend/runs/detect/train3/train_batch452.jpg

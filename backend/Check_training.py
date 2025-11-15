@@ -3,17 +3,17 @@ import os
 
 # ------------------ CONFIG ------------------
 # Path to your trained YOLO model
-MODEL_PATH = "runs/detect/train3/weights/best.pt"  # update if needed
+MODEL_PATH = "runs/detect/train3/weights/best.pt" 
 
 # Folder containing test images
-INPUT_FOLDER = "predict3"  # replace with your folder
+INPUT_FOLDER = "predict3"  
 # Folder to save detection results
 OUTPUT_FOLDER = "yolo_results"
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
 # Confidence thresholds
 CONFIDENCE_DEFAULT = 0.5
-CONFIDENCE_FALLBACK = 0.3  # if nothing is detected
+CONFIDENCE_FALLBACK = 0.3  
 
 # ------------------ LOAD MODEL ------------------
 model = YOLO(MODEL_PATH)

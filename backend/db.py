@@ -1,4 +1,3 @@
-# db.py
 from pymongo import MongoClient
 import os
 from dotenv import load_dotenv
@@ -13,6 +12,6 @@ db = client[DB_NAME]
 
 # Collections
 users_collection = db["users"]
-detections_collection = db["detections"]  # <-- history will be saved here
+detections_collection = db["detections"] 
 
 print("✅ MongoDB connected:", client.list_database_names())

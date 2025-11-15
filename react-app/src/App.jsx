@@ -430,7 +430,7 @@ const handleStopLive = async () => {
               </a>
               <span className="text-gray-500">|</span>
               <a
-                href="https://www.tensorflow.org/lite/models/object_detection/overview"
+                href="https://docs.openvino.ai/2023.3/omz_models_model_mobilenet_ssd.html"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-sm text-gray-300 hover:text-pink-400 transition-colors duration-300 underline"

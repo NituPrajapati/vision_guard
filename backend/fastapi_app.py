@@ -10,6 +10,7 @@ import cv2
 import threading
 import time
 import datetime
+import shutil
 import jwt
 from pydantic import BaseModel
 from typing import Optional
@@ -365,15 +366,22 @@ async def detect(file: UploadFile = File(...), request: Request = None):
 # Live detection state
 is_live_running = False
 _live_thread = None
+_live_user_email = None  # Store user email for saving snapshots
+_last_snapshot_time = 0
+_snapshot_interval = 10  # Save snapshot every 10 seconds
 
 
-def _run_live_detection(cam_index: int = 0):
-    global is_live_running
+def _run_live_detection(cam_index: int = 0, user_email: str = None):
+    global is_live_running, _last_snapshot_time
     if idcard_model is None or coco_model is None:
         return
     cap = cv2.VideoCapture(cam_index)
     save_dir = os.path.join(Config.RESULT_FOLDER, "live")
     os.makedirs(save_dir, exist_ok=True)
+    
+    frame_count = 0
+    _last_snapshot_time = time.time()
+    last_detected_labels = set()  # Store labels from last frame
 
     while is_live_running and cap.isOpened():
         ret, frame = cap.read()
@@ -382,6 +390,8 @@ def _run_live_detection(cam_index: int = 0):
 
         idcard_results = idcard_model.predict(frame, conf=0.5, verbose=False)
         coco_results = coco_model.predict(frame, conf=0.5, verbose=False)
+        
+        detected_labels = set()
 
         for r in idcard_results:
             for box in r.boxes:
@@ -389,6 +399,7 @@ def _run_live_detection(cam_index: int = 0):
                 label = f"IDCard {box.conf[0]:.2f}"
                 cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
                 cv2.putText(frame, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+                detected_labels.add("IDCard")
 
         for r in coco_results:
             for box in r.boxes:
@@ -397,27 +408,116 @@ def _run_live_detection(cam_index: int = 0):
                 label = f"{coco_model.names[cls]} {box.conf[0]:.2f}"
                 cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 0, 0), 2)
                 cv2.putText(frame, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
+                detected_labels.add(coco_model.names[cls])
 
         out_path = os.path.join(save_dir, "latest.jpg")
         cv2.imwrite(out_path, frame)
+        
+        # Store labels for final snapshot
+        last_detected_labels = detected_labels.copy()
+        
+        # Save snapshot to Cloudinary and database periodically
+        current_time = time.time()
+        if current_time - _last_snapshot_time >= _snapshot_interval and user_email:
+            try:
+                snapshot_filename = f"live_snapshot_{int(current_time)}.jpg"
+                snapshot_path = os.path.join(save_dir, snapshot_filename)
+                cv2.imwrite(snapshot_path, frame)
+                
+                # Upload to Cloudinary
+                cloudinary_result = upload_to_cloudinary(snapshot_path, resource_type="image")
+                cloudinary_url = cloudinary_result["url"]
+                cloudinary_public_id = cloudinary_result["public_id"]
+                
+                # Save to database
+                detections_collection.insert_one({
+                    "email": user_email,
+                    "filename": f"live_detection_{datetime.datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.jpg",
+                    "result_url": cloudinary_url,
+                    "cloudinary_public_id": cloudinary_public_id,
+                    "result_path": snapshot_path.replace("\\", "/"),
+                    "labels": list(detected_labels),
+                    "detection_type": "live",
+                    "timestamp": datetime.datetime.utcnow()
+                })
+                
+                logger.info(f"Live detection snapshot saved: {cloudinary_url}")
+                
+                # Clean up local snapshot file
+                try:
+                    if os.path.exists(snapshot_path):
+                        os.remove(snapshot_path)
+                except Exception as e:
+                    logger.warning(f"Failed to clean up snapshot file: {str(e)}")
+                
+                _last_snapshot_time = current_time
+            except Exception as e:
+                logger.error(f"Failed to save live detection snapshot: {str(e)}", exc_info=True)
+        
+        frame_count += 1
+        time.sleep(0.05)  # Small delay to prevent excessive CPU usage
 
     cap.release()
+    
+    # Save final snapshot when stopping (if we have detections)
+    if user_email and os.path.exists(out_path):
+        try:
+            final_snapshot_path = os.path.join(save_dir, f"final_snapshot_{int(time.time())}.jpg")
+            # Copy latest.jpg as final snapshot
+            shutil.copy2(out_path, final_snapshot_path)
+            
+            # Get detected labels from the last frame (we'll need to run detection again or store them)
+            # For simplicity, we'll just save the frame
+            cloudinary_result = upload_to_cloudinary(final_snapshot_path, resource_type="image")
+            cloudinary_url = cloudinary_result["url"]
+            cloudinary_public_id = cloudinary_result["public_id"]
+            
+            # Save to database
+            detections_collection.insert_one({
+                "email": user_email,
+                "filename": f"live_detection_final_{datetime.datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.jpg",
+                "result_url": cloudinary_url,
+                "cloudinary_public_id": cloudinary_public_id,
+                "result_path": final_snapshot_path.replace("\\", "/"),
+                "labels": list(last_detected_labels),
+                "detection_type": "live",
+                "timestamp": datetime.datetime.utcnow()
+            })
+            
+            logger.info(f"Final live detection snapshot saved: {cloudinary_url}")
+            
+            # Clean up
+            try:
+                if os.path.exists(final_snapshot_path):
+                    os.remove(final_snapshot_path)
+            except Exception as e:
+                logger.warning(f"Failed to clean up final snapshot: {str(e)}")
+        except Exception as e:
+            logger.error(f"Failed to save final live detection snapshot: {str(e)}", exc_info=True)
 
 
 @app.post("/live/start")
-def start_live():
-    global is_live_running, _live_thread
+def start_live(request: Request):
+    global is_live_running, _live_thread, _live_user_email
     if not is_live_running:
+        # Get user email for saving snapshots
+        user_info = get_user_info_from_cookie(request)
+        _live_user_email = user_info.get("email") if user_info else None
+        
         is_live_running = True
-        _live_thread = threading.Thread(target=_run_live_detection, daemon=True)
+        _live_thread = threading.Thread(target=_run_live_detection, args=(0, _live_user_email), daemon=True)
         _live_thread.start()
     return {"message": "Live detection started"}
 
 
 @app.post("/live/stop")
-def stop_live():
-    global is_live_running
+def stop_live(request: Request):
+    global is_live_running, _live_user_email
     is_live_running = False
+    # Wait a bit for the thread to finish saving final snapshot
+    if _live_thread and _live_thread.is_alive():
+        _live_thread.join(timeout=2)
+    _live_user_email = None
     return {"message": "Live detection stopped"}
 
 
