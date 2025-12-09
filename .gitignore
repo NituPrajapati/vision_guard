@@ -69,3 +69,7 @@ share/
 runs/
 .dockerignore
 Dockerfile
+EMAIL_SETUP.md
+DEPLOYMENT_GUIDE.md
+FIX_SUMMARY.md
+EMAIL_OPTIMIZATION_SUMMARY.md
