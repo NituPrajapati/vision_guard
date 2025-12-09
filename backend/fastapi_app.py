@@ -41,6 +41,13 @@ app = FastAPI()
 
 app.mount("/results", StaticFiles(directory=Config.RESULT_FOLDER), name="results")
 
+# Configure Cloudinary
+cloudinary.config(
+    cloud_name=Config.CLOUDINARY_CLOUD_NAME,
+    api_key=Config.CLOUDINARY_API_KEY,
+    api_secret=Config.CLOUDINARY_API_SECRET
+)
+
 @app.on_event("startup")
 def on_startup():
     global idcard_model, coco_model
@@ -49,13 +56,6 @@ def on_startup():
     # Lazy load models at startup to avoid import-time issues with reload on Windows
     idcard_model = YOLO(Config.IDCARD_MODEL_PATH)
     coco_model = YOLO(Config.COCO_MODEL_PATH)
-    
-# Configure Cloudinary
-cloudinary.config(
-    cloud_name=Config.CLOUDINARY_CLOUD_NAME,
-    api_key=Config.CLOUDINARY_API_KEY,
-    api_secret=Config.CLOUDINARY_API_SECRET
-)
 
 # CORS configuration - supports multiple origins from environment variable
 allowed_origins = os.getenv(
