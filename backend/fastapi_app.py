@@ -23,6 +23,10 @@ from authlib.integrations.starlette_client import OAuth
 import cloudinary
 import cloudinary.uploader
 from cloudinary.utils import cloudinary_url
+from typing import Dict
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 # Setup logging
 logging.basicConfig(
@@ -30,6 +34,8 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# Email configuration is now in Config class
 
 app = FastAPI()
 
@@ -163,6 +169,134 @@ def get_user_info_from_cookie(request: Request) -> Optional[dict]:
         return None
     except Exception:
         return None
+
+def send_alert_email(email: str, detection_type: str = "static") -> Dict:
+    """
+    Send alert email with retry mechanism (2 retries)
+    
+    Args:
+        email: Recipient email address
+        detection_type: Type of detection ("static" or "live")
+    
+    Returns:
+        Dict with success status and message/error
+    """
+    if not email:
+        logger.warning("[EMAIL] No email address provided")
+        return {"success": False, "error": "No email address provided"}
+    
+    # Check if email credentials are configured
+    if not Config.EMAIL_USER or not Config.EMAIL_PASSWORD:
+        logger.info(f"[EMAIL] Email credentials not configured - EMAIL_USER: {bool(Config.EMAIL_USER)}, EMAIL_PASSWORD: {bool(Config.EMAIL_PASSWORD)}")
+        logger.info("[EMAIL] Please add EMAIL_USER and EMAIL_PASSWORD to your .env file in the backend directory")
+        return {"success": False, "error": "Email service not configured. Check .env file in backend directory."}
+    
+    logger.info(f"[EMAIL] Using SMTP server: {Config.SMTP_SERVER}:{Config.SMTP_PORT}")
+    logger.info(f"[EMAIL] From email: {Config.EMAIL_USER}")
+    
+    logger.info(f"[EMAIL] Preparing to send email to {email}...")
+    
+    # Prepare email content
+    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    detection_type_text = "live detection" if detection_type == "live" else "static detection"
+    
+    # Simple HTML template
+    html_content = f"""
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f5f5f5;">
+        <div style="background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <h2 style="color: #ff6b6b; margin-top: 0;">🚨 VisionGuard Alert</h2>
+            <p>No objects were detected in your <strong>{detection_type_text}</strong>.</p>
+            <div style="background-color: #f9f9f9; padding: 15px; border-radius: 4px; margin: 20px 0;">
+                <p style="margin: 5px 0;"><strong>Detection Type:</strong> {detection_type_text.title()}</p>
+                <p style="margin: 5px 0;"><strong>Timestamp:</strong> {now}</p>
+            </div>
+            <p>This means the image was processed but no objects (like ID cards, persons, or other items) were found.</p>
+            <p>Please try again with another image or adjust your camera/view.</p>
+            <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+            <p style="color: #666; font-size: 12px; margin: 0;">VisionGuard Detection System</p>
+        </div>
+    </div>
+    """
+    
+    # Plain text version
+    text_content = f"""
+VisionGuard Alert
+
+No objects were detected in your {detection_type_text}.
+
+Detection Type: {detection_type_text.title()}
+Timestamp: {now}
+
+This means the image was processed but no objects (like ID cards, persons, or other items) were found.
+Please try again with another image or adjust your camera/view.
+
+---
+VisionGuard Detection System
+"""
+    
+    # Retry logic (2 retries = 3 total attempts)
+    max_retries = 2
+    retry_delay = 2  # seconds
+    last_error = None
+    
+    for attempt in range(max_retries + 1):
+        try:
+            # Create new SMTP connection for every email
+            logger.info(f"[EMAIL] Creating new SMTP connection (attempt {attempt + 1}/{max_retries + 1})")
+            server = smtplib.SMTP(Config.SMTP_SERVER, Config.SMTP_PORT, timeout=10)
+            server.starttls()
+            server.login(Config.EMAIL_USER, Config.EMAIL_PASSWORD)
+            
+            # Create message
+            msg = MIMEMultipart('alternative')
+            msg['Subject'] = "VisionGuard Alert: No Objects Detected"
+            msg['From'] = Config.EMAIL_USER
+            msg['To'] = email
+            
+            # Attach parts
+            part1 = MIMEText(text_content, 'plain')
+            part2 = MIMEText(html_content, 'html')
+            msg.attach(part1)
+            msg.attach(part2)
+            
+            # Send email
+            server.send_message(msg)
+            server.quit()
+            
+            logger.info(f"✅ Email sent successfully to {email}")
+            return {"success": True, "message": "Email sent successfully"}
+            
+        except smtplib.SMTPAuthenticationError as e:
+            last_error = f"SMTP Authentication failed: {str(e)}"
+            logger.error(f"[EMAIL] {last_error}")
+            # Don't retry on auth errors - credentials are wrong
+            return {"success": False, "error": f"Email authentication failed: {str(e)}. Please check your EMAIL_USER and EMAIL_PASSWORD in .env file."}
+            
+        except (smtplib.SMTPServerDisconnected, OSError, ConnectionError) as e:
+            last_error = f"SMTP connection error: {str(e)}"
+            logger.warning(f"[EMAIL] {last_error}, attempt {attempt + 1}/{max_retries + 1}")
+            if attempt < max_retries:
+                time.sleep(retry_delay)
+            else:
+                return {"success": False, "error": last_error}
+                
+        except smtplib.SMTPException as e:
+            last_error = f"SMTP error: {str(e)}"
+            logger.error(f"[EMAIL] {last_error}")
+            if attempt < max_retries:
+                time.sleep(retry_delay)
+            else:
+                return {"success": False, "error": last_error}
+                
+        except Exception as e:
+            last_error = f"Unexpected error: {str(e)}"
+            logger.error(f"[EMAIL] {last_error}", exc_info=True)
+            if attempt < max_retries:
+                time.sleep(retry_delay)
+            else:
+                return {"success": False, "error": last_error}
+    
+    return {"success": False, "error": last_error or "Failed to send email after retries"}
 
 
 @app.on_event("startup")
@@ -338,6 +472,28 @@ async def detect(file: UploadFile = File(...), request: Request = None):
             "timestamp": datetime.datetime.utcnow()
         })
 
+        # Send email if no objects detected
+        if len(detected_labels) == 0:
+            logger.info(f"No objects detected. Checking for user email to send notification...")
+            # Use the user_info we already retrieved above, or get it again if needed
+            if not user_info:
+                user_info = get_user_info_from_cookie(request)
+            user_email = user_info.get("email") if user_info else None
+            
+            logger.info(f"User info: {user_info}, Email: {user_email}")
+            
+            if user_email:
+                # Use "static" for both static images and videos (non-live detection)
+                logger.info(f"Attempting to send alert email to {user_email}...")
+                result = send_alert_email(user_email, detection_type="static")
+                if result.get("success"):
+                    detection_type_text = "video" if is_video else "static"
+                    logger.info(f"✅ Alert email sent: No objects detected in {detection_type_text} detection to {user_email}")
+                else:
+                    logger.error(f"❌ Failed to send alert email: {result.get('error')}")
+            else:
+                logger.warning(f"⚠️ No user email found. User might not be logged in. Cannot send alert email.")
+
         # Clean up local temporary files after upload
         try:
             if os.path.exists(save_path):
@@ -443,7 +599,15 @@ def _run_live_detection(cam_index: int = 0, user_email: str = None):
                 
                 logger.info(f"Live detection snapshot saved: {cloudinary_url}")
                 
+                # Send email if no objects detected
+                if len(detected_labels) == 0 and user_email:
+                    result = send_alert_email(user_email, detection_type="live")
+                    if result.get("success"):
+                        logger.info(f"Alert email sent: No objects detected in live detection to {user_email}")
+                    else:
+                        logger.warning(f"Failed to send alert email: {result.get('error')}")
                 # Clean up local snapshot file
+
                 try:
                     if os.path.exists(snapshot_path):
                         os.remove(snapshot_path)
@@ -485,6 +649,13 @@ def _run_live_detection(cam_index: int = 0, user_email: str = None):
             })
             
             logger.info(f"Final live detection snapshot saved: {cloudinary_url}")
+            # Send email if no objects detected in final snapshot
+            if len(last_detected_labels) == 0 and user_email:
+                result = send_alert_email(user_email, detection_type="live")
+                if result.get("success"):
+                    logger.info(f"Alert email sent: No objects detected in final live detection to {user_email}")
+                else:
+                    logger.warning(f"Failed to send alert email: {result.get('error')}")
             
             # Clean up
             try:
@@ -996,6 +1167,230 @@ async def google_callback(request: Request):
         logger.error(f"[GOOGLE CALLBACK] Step 5 FAILED: {error_msg}", exc_info=True)
         return RedirectResponse(f"{Config.FRONTEND_BASE}/auth/callback?error=cookie_failed&detail={urllib.parse.quote(str(e))}")
 
+@app.post("/send-email")
+def send_mail(request: Request):
+    """API endpoint to send alert email - uses cookie for authentication"""
+    email = request.cookies.get("username")
+    if not email:
+        raise HTTPException(status_code=401, detail="User not logged in")
+    
+    result = send_alert_email(email)
+    
+    if not result.get("success"):
+        raise HTTPException(
+            status_code=500, 
+            detail=result.get("error", "Failed to send email")
+        )
+    
+    return {"message": "Email sent successfully"}
+
+@app.get("/test-email")
+async def test_email(request: Request):
+    """
+    Test endpoint to diagnose email sending issues.
+    Tests SMTP connection, authentication, and email sending.
+    """
+    test_results = {
+        "step": "Starting email test",
+        "email_user_configured": bool(Config.EMAIL_USER),
+        "email_password_configured": bool(Config.EMAIL_PASSWORD),
+        "smtp_server": Config.SMTP_SERVER,
+        "smtp_port": Config.SMTP_PORT,
+        "tests": []
+    }
+    
+    # Test 1: Check if credentials are configured
+    logger.info("[EMAIL TEST] Step 1: Checking configuration...")
+    if not Config.EMAIL_USER:
+        test_results["tests"].append({
+            "test": "EMAIL_USER configuration",
+            "status": "FAILED",
+            "message": "EMAIL_USER is not set in environment variables"
+        })
+        return JSONResponse(status_code=400, content={
+            **test_results,
+            "error": "EMAIL_USER not configured. Add EMAIL_USER=your-email@gmail.com to .env file"
+        })
+    else:
+        test_results["tests"].append({
+            "test": "EMAIL_USER configuration",
+            "status": "PASSED",
+            "message": f"EMAIL_USER is set (showing first 3 chars: {Config.EMAIL_USER[:3]}...)"
+        })
+    
+    if not Config.EMAIL_PASSWORD:
+        test_results["tests"].append({
+            "test": "EMAIL_PASSWORD configuration",
+            "status": "FAILED",
+            "message": "EMAIL_PASSWORD is not set in environment variables"
+        })
+        return JSONResponse(status_code=400, content={
+            **test_results,
+            "error": "EMAIL_PASSWORD not configured. Add EMAIL_PASSWORD=your-app-password to .env file"
+        })
+    else:
+        test_results["tests"].append({
+            "test": "EMAIL_PASSWORD configuration",
+            "status": "PASSED",
+            "message": "EMAIL_PASSWORD is set (length: " + str(len(Config.EMAIL_PASSWORD)) + " characters)"
+        })
+    
+    # Test 2: Get recipient email from cookie or use test email
+    recipient_email = request.cookies.get("username") or request.query_params.get("to")
+    if not recipient_email:
+        recipient_email = Config.EMAIL_USER  # Send to self if no recipient specified
+        test_results["tests"].append({
+            "test": "Recipient email",
+            "status": "INFO",
+            "message": f"No recipient specified, using EMAIL_USER: {recipient_email}"
+        })
+    else:
+        test_results["tests"].append({
+            "test": "Recipient email",
+            "status": "PASSED",
+            "message": f"Recipient: {recipient_email}"
+        })
+    
+    # Test 3: Test SMTP connection
+    logger.info("[EMAIL TEST] Step 2: Testing SMTP connection...")
+    try:
+        server = smtplib.SMTP(Config.SMTP_SERVER, Config.SMTP_PORT, timeout=10)
+        test_results["tests"].append({
+            "test": "SMTP connection",
+            "status": "PASSED",
+            "message": f"Successfully connected to {Config.SMTP_SERVER}:{Config.SMTP_PORT}"
+        })
+    except Exception as e:
+        test_results["tests"].append({
+            "test": "SMTP connection",
+            "status": "FAILED",
+            "message": f"Failed to connect: {str(e)}"
+        })
+        return JSONResponse(status_code=500, content={
+            **test_results,
+            "error": f"SMTP connection failed: {str(e)}"
+        })
+    
+    # Test 4: Test STARTTLS
+    logger.info("[EMAIL TEST] Step 3: Testing STARTTLS...")
+    try:
+        server.starttls()
+        test_results["tests"].append({
+            "test": "STARTTLS encryption",
+            "status": "PASSED",
+            "message": "TLS encryption enabled successfully"
+        })
+    except Exception as e:
+        server.quit()
+        test_results["tests"].append({
+            "test": "STARTTLS encryption",
+            "status": "FAILED",
+            "message": f"Failed to enable TLS: {str(e)}"
+        })
+        return JSONResponse(status_code=500, content={
+            **test_results,
+            "error": f"STARTTLS failed: {str(e)}"
+        })
+    
+    # Test 5: Test authentication
+    logger.info("[EMAIL TEST] Step 4: Testing authentication...")
+    try:
+        server.login(Config.EMAIL_USER, Config.EMAIL_PASSWORD)
+        test_results["tests"].append({
+            "test": "SMTP authentication",
+            "status": "PASSED",
+            "message": "Successfully authenticated with Gmail"
+        })
+    except smtplib.SMTPAuthenticationError as e:
+        server.quit()
+        error_code = e.smtp_code if hasattr(e, 'smtp_code') else 'Unknown'
+        error_msg = str(e)
+        test_results["tests"].append({
+            "test": "SMTP authentication",
+            "status": "FAILED",
+            "message": f"Authentication failed (Code: {error_code}): {error_msg}"
+        })
+        return JSONResponse(status_code=401, content={
+            **test_results,
+            "error": "Authentication failed. Common issues:\n"
+                    "1. EMAIL_USER or EMAIL_PASSWORD is incorrect\n"
+                    "2. You need to use an App Password, not your regular Gmail password\n"
+                    "3. 2-Step Verification must be enabled in your Google Account\n"
+                    "4. 'Less secure app access' might be disabled (if using regular password)\n"
+                    f"Error details: {error_msg}"
+        })
+    except Exception as e:
+        server.quit()
+        test_results["tests"].append({
+            "test": "SMTP authentication",
+            "status": "FAILED",
+            "message": f"Unexpected error during authentication: {str(e)}"
+        })
+        return JSONResponse(status_code=500, content={
+            **test_results,
+            "error": f"Authentication error: {str(e)}"
+        })
+    
+    # Test 6: Test sending email
+    logger.info("[EMAIL TEST] Step 5: Testing email sending...")
+    try:
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = "VisionGuard Email Test"
+        msg['From'] = Config.EMAIL_USER
+        msg['To'] = recipient_email
+        
+        text_content = "This is a test email from VisionGuard. If you receive this, your email configuration is working correctly!"
+        html_content = """
+        <div style="font-family: Arial, sans-serif; padding: 20px;">
+            <h2 style="color: #4CAF50;">✅ VisionGuard Email Test</h2>
+            <p>This is a <strong>test email</strong> from VisionGuard.</p>
+            <p>If you receive this, your email configuration is working correctly!</p>
+            <p><small>Sent at: """ + datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + """</small></p>
+        </div>
+        """
+        
+        part1 = MIMEText(text_content, 'plain')
+        part2 = MIMEText(html_content, 'html')
+        msg.attach(part1)
+        msg.attach(part2)
+        
+        server.send_message(msg)
+        test_results["tests"].append({
+            "test": "Email sending",
+            "status": "PASSED",
+            "message": f"Test email sent successfully to {recipient_email}"
+        })
+        
+        server.quit()
+        
+        test_results["step"] = "All tests passed!"
+        test_results["summary"] = "✅ Email configuration is working correctly! Check your inbox."
+        
+        return JSONResponse(content=test_results)
+        
+    except smtplib.SMTPRecipientsRefused as e:
+        server.quit()
+        test_results["tests"].append({
+            "test": "Email sending",
+            "status": "FAILED",
+            "message": f"Recipient email rejected: {str(e)}"
+        })
+        return JSONResponse(status_code=400, content={
+            **test_results,
+            "error": f"Invalid recipient email address: {recipient_email}"
+        })
+    except Exception as e:
+        server.quit()
+        test_results["tests"].append({
+            "test": "Email sending",
+            "status": "FAILED",
+            "message": f"Failed to send email: {str(e)}"
+        })
+        return JSONResponse(status_code=500, content={
+            **test_results,
+            "error": f"Email sending failed: {str(e)}"
+        })
+        
 import uvicorn
 
 if __name__ == "__main__":
