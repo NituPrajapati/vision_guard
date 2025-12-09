@@ -39,6 +39,17 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
+app.mount("/results", StaticFiles(directory=Config.RESULT_FOLDER), name="results")
+
+@app.on_event("startup")
+def on_startup():
+    global idcard_model, coco_model
+    os.makedirs(Config.RESULT_FOLDER, exist_ok=True)
+    os.makedirs(os.path.join(Config.RESULT_FOLDER, "predictions"), exist_ok=True)
+    # Lazy load models at startup to avoid import-time issues with reload on Windows
+    idcard_model = YOLO(Config.IDCARD_MODEL_PATH)
+    coco_model = YOLO(Config.COCO_MODEL_PATH)
+    
 # Configure Cloudinary
 cloudinary.config(
     cloud_name=Config.CLOUDINARY_CLOUD_NAME,
@@ -297,17 +308,6 @@ VisionGuard Detection System
                 return {"success": False, "error": last_error}
     
     return {"success": False, "error": last_error or "Failed to send email after retries"}
-
-
-@app.on_event("startup")
-def on_startup():
-    global idcard_model, coco_model
-    os.makedirs(Config.RESULT_FOLDER, exist_ok=True)
-    os.makedirs(os.path.join(Config.RESULT_FOLDER, "predictions"), exist_ok=True)
-    # Lazy load models at startup to avoid import-time issues with reload on Windows
-    idcard_model = YOLO(Config.IDCARD_MODEL_PATH)
-    coco_model = YOLO(Config.COCO_MODEL_PATH)
-
 
 @app.post("/detect")
 async def detect(file: UploadFile = File(...), request: Request = None):
