@@ -79,6 +79,23 @@ def health():
 
 idcard_model = None
 coco_model = None
+_model_lock = threading.Lock()  # Lock to prevent multiple threads loading models at once
+
+
+def _load_models():
+    """Lazy load YOLO models on first use (thread-safe)"""
+    global idcard_model, coco_model
+    if idcard_model is None or coco_model is None:
+        with _model_lock:
+            # Double-check after acquiring lock (another thread might have loaded them)
+            if idcard_model is None:
+                logger.info("Loading ID card model...")
+                idcard_model = YOLO(Config.IDCARD_MODEL_PATH)
+                logger.info("ID card model loaded successfully")
+            if coco_model is None:
+                logger.info("Loading COCO model...")
+                coco_model = YOLO(Config.COCO_MODEL_PATH)
+                logger.info("COCO model loaded successfully")
 
 
 # -------------------- Cloudinary helper functions --------------------
@@ -299,18 +316,19 @@ VisionGuard Detection System
 
 @app.on_event("startup")
 def on_startup():
-    global idcard_model, coco_model
+    """Create necessary folders at startup. Models load lazily on first use."""
     os.makedirs(Config.RESULT_FOLDER, exist_ok=True)
     os.makedirs(os.path.join(Config.RESULT_FOLDER, "predictions"), exist_ok=True)
-    # Lazy load models at startup to avoid import-time issues with reload on Windows
-    idcard_model = YOLO(Config.IDCARD_MODEL_PATH)
-    coco_model = YOLO(Config.COCO_MODEL_PATH)
+    os.makedirs(os.path.join(Config.RESULT_FOLDER, "live"), exist_ok=True)
+    logger.info("Startup complete - folders created. Models will load on first detection request.")
 
 @app.post("/detect")
 async def detect(file: UploadFile = File(...), request: Request = None):
     try:
+        # Load models lazily on first use
+        _load_models()
         if idcard_model is None or coco_model is None:
-            raise HTTPException(status_code=503, detail="Models not initialized yet")
+            raise HTTPException(status_code=503, detail="Failed to load models")
         if not file:
             raise HTTPException(status_code=400, detail="No file uploaded")
 
@@ -526,7 +544,10 @@ _snapshot_interval = 10  # Save snapshot every 10 seconds
 
 def _run_live_detection(cam_index: int = 0, user_email: str = None):
     global is_live_running, _last_snapshot_time
+    # Load models lazily on first use
+    _load_models()
     if idcard_model is None or coco_model is None:
+        logger.error("Failed to load models for live detection")
         return
     cap = cv2.VideoCapture(cam_index)
     save_dir = os.path.join(Config.RESULT_FOLDER, "live")
@@ -1391,4 +1412,5 @@ async def test_email(request: Request):
 import uvicorn
 
 if __name__ == "__main__":
-    uvicorn.run("fastapi_app:app", host="0.0.0.0", port=5000, reload=True)
+    port = int(os.environ.get("PORT", 5000))
+    uvicorn.run("fastapi_app:app", host="0.0.0.0", port=port)
