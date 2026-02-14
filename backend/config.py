@@ -62,10 +62,4 @@ class Config:
     # Primary redirect base (default to 5173 for local dev, should be set in production)
     FRONTEND_BASE = os.getenv("FRONTEND_BASE", FRONTEND_BASE_5173)
     GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI") or (FRONTEND_BASE + "/auth/callback")
-    
-    # Email settings (optional - email service will handle missing credentials gracefully)
-    EMAIL_USER = os.getenv("EMAIL_USER")
-    EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
-    SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com")
-    SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
 
