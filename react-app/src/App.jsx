@@ -238,11 +238,11 @@ const handleStopLive = async () => {
           </div>
 
           {/* Main Heading */}
-          <div className='flex text-center justify-center mb-6'>
+          <div className='flex text-center justify-center mb-6  min-h-[260px]'>
             <div className="max-w-4xl">
-              <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-center mb-4 leading-tight">
+              <h1 className="text-4xl md:text-5xl font-bold text-center mb-4 leading-tight">
                 <span className="bg-gradient-to-r from-pink-400 via-purple-400 to-cyan-400 bg-clip-text text-transparent">
-                  Advanced Object Detection
+                  Object Detection
                 </span>
                 <br />
                 <span className="text-white">Made Simple</span>
@@ -457,8 +457,9 @@ const handleStopLive = async () => {
           </button>
         )}
       </div>
+
     </>
-  )
+  );
 }
 
 export function Login({ setToken }) {
