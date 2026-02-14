@@ -40,8 +40,13 @@ function App() {
     }
   };
 
+  // Defer user fetch to avoid blocking initial render (improves LCP)
   useEffect(() => {
-    fetchUser();
+    // Use requestIdleCallback or setTimeout to defer non-critical API call
+    const timeoutId = setTimeout(() => {
+      fetchUser();
+    }, 100);
+    return () => clearTimeout(timeoutId);
   }, []);
 
   // Handle scroll to top button visibility
@@ -237,10 +242,10 @@ const handleStopLive = async () => {
             </div>
           </div>
 
-          {/* Main Heading */}
-          <div className='flex text-center justify-center mb-6  min-h-[260px]'>
+          {/* Main Heading - Fixed height to prevent CLS */}
+          <div className='flex text-center justify-center mb-6' style={{ minHeight: '260px' }}>
             <div className="max-w-4xl">
-              <h1 className="text-4xl md:text-5xl font-bold text-center mb-4 leading-tight">
+              <h1 className="text-4xl md:text-5xl font-bold text-center mb-4 leading-tight" style={{ minHeight: '120px' }}>
                 <span className="bg-gradient-to-r from-pink-400 via-purple-400 to-cyan-400 bg-clip-text text-transparent">
                   Object Detection
                 </span>
@@ -257,12 +262,20 @@ const handleStopLive = async () => {
           </div>
         </div>
 
-        {/* Video background */}
+        {/* Video background - Optimized for LCP and CLS */}
         <div className="flex items-center justify-center px-4 mb-12">
           <div className="relative group">
             <div className="absolute -inset-1 bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-500 rounded-3xl blur-lg opacity-30 group-hover:opacity-50 transition duration-300"></div>
-            <video autoPlay loop muted className="relative w-full max-w-4xl h-[450px] object-cover rounded-3xl shadow-2xl border border-slate-700/50">
-              <source src="Recording 2025-09-07 081146.mp4" type="video/mp4"  />
+            <video 
+              autoPlay 
+              loop 
+              muted 
+              playsInline
+              preload="metadata"
+              className="relative w-full max-w-4xl h-[450px] object-cover rounded-3xl shadow-2xl border border-slate-700/50"
+              style={{ aspectRatio: '16/9' }}
+            >
+              <source src="Recording 2025-09-07 081146.mp4" type="video/mp4" />
             </video>
           </div>
         </div>
@@ -327,7 +340,8 @@ const handleStopLive = async () => {
               <p className="text-gray-400 text-sm mt-2">This may take a few moments</p>
             </div>
           )}
-          <div className="flex flex-wrap justify-center gap-6 max-w-7xl">
+          {/* Reserve space for results to prevent CLS */}
+          <div className="flex flex-wrap justify-center gap-6 max-w-7xl" style={{ minHeight: resultUrls.length > 0 || isLive ? 'auto' : '0' }}>
             {isLive && (
             <div className="relative group">
               <div className="absolute -inset-1 bg-gradient-to-r from-pink-500 to-purple-500 rounded-2xl blur-lg opacity-50"></div>
@@ -340,6 +354,8 @@ const handleStopLive = async () => {
                   src={`${API_URL}/live/stream`}
                   alt="Live Detection Stream"
                   className="w-full max-w-4xl rounded-xl shadow-2xl"
+                  style={{ aspectRatio: '16/9', objectFit: 'contain' }}
+                  loading="lazy"
                 />
               </div>
             </div>
@@ -369,7 +385,9 @@ const handleStopLive = async () => {
                       <video
                         src={fullUrl}
                         controls
+                        preload="metadata"
                         className="w-full max-w-2xl rounded-xl shadow-2xl"
+                        style={{ aspectRatio: '16/9', objectFit: 'contain' }}
                       >
                         Your browser does not support the video tag.
                       </video>
@@ -378,6 +396,8 @@ const handleStopLive = async () => {
                         src={fullUrl}
                         alt="Detection Result"
                         className="w-full max-w-2xl rounded-xl shadow-2xl"
+                        style={{ aspectRatio: '16/9', objectFit: 'contain' }}
+                        loading="lazy"
                       />
                     )}
                     <div className="absolute top-6 right-6 bg-green-500/90 backdrop-blur-sm px-3 py-1 rounded-full text-xs font-semibold text-white flex items-center gap-1">

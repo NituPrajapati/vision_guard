@@ -5,6 +5,19 @@
     <link rel="icon" type="image/svg+xml" href="/src/assets/logo.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>VisionGuard</title>
+    <!-- Preconnect to external domains for faster resource loading -->
+    <link rel="dns-prefetch" href="https://res.cloudinary.com" />
+    <!-- Prevent layout shift -->
+    <style>
+      /* Reserve space for video to prevent CLS */
+      video {
+        display: block;
+      }
+      /* Prevent font-related layout shifts */
+      body {
+        font-display: swap;
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>
