@@ -13,5 +13,5 @@ authlib==1.3.0
 itsdangerous
 httpx
 cloudinary
-onnxruntime==1.19.2
+onnxruntime==1.24.2
 
