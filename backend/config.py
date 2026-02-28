@@ -31,8 +31,8 @@ class Config:
     ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp', 'mp4', 'avi'}
     
     # Model paths
-    IDCARD_MODEL_PATH = "runs/detect/train3/weights/best.pt"
-    COCO_MODEL_PATH = "yolov8n.pt"
+    IDCARD_MODEL_PATH = "runs/detect/train3/weights/best.onnx"
+    COCO_MODEL_PATH = "yolov8n.onnx"
     
     # Temporary processing folder (files are cleaned up after Cloudinary upload)
     # Only used for: 1) Temporary file processing, 2) Live detection stream
