@@ -78,19 +78,27 @@ _model_lock = threading.Lock()  # Lock to prevent multiple threads loading model
 
 
 def _load_models():
-    """Lazy load YOLO models on first use (thread-safe)"""
+    """Lazy load YOLO models on first use (thread-safe).
+
+    On low-memory environments (e.g. Render free tier), you can disable the
+    COCO model via ENABLE_COCO_MODEL=false in the backend .env to reduce RAM.
+    """
     global idcard_model, coco_model
-    if idcard_model is None or coco_model is None:
+    # Only attempt to load COCO model if it's enabled in config
+    need_coco = Config.ENABLE_COCO_MODEL and coco_model is None
+    if idcard_model is None or need_coco:
         with _model_lock:
             # Double-check after acquiring lock (another thread might have loaded them)
             if idcard_model is None:
                 logger.info("Loading ID card model...")
                 idcard_model = YOLO(Config.IDCARD_MODEL_PATH)
                 logger.info("ID card model loaded successfully")
-            if coco_model is None:
+            if Config.ENABLE_COCO_MODEL and coco_model is None:
                 logger.info("Loading COCO model...")
                 coco_model = YOLO(Config.COCO_MODEL_PATH)
                 logger.info("COCO model loaded successfully")
+            elif not Config.ENABLE_COCO_MODEL:
+                logger.info("COCO model disabled via ENABLE_COCO_MODEL=false")
 
 
 # -------------------- Cloudinary helper functions --------------------
@@ -246,9 +254,17 @@ async def detect(file: UploadFile = File(...), request: Request = None):
                 if not ret:
                     break
 
+                # Optionally downscale frame a bit to reduce CPU/RAM usage on low-memory hosts
+                h, w = frame.shape[:2]
+                if max(h, w) > 720:
+                    scale = 720.0 / max(h, w)
+                    frame = cv2.resize(frame, (int(w * scale), int(h * scale)))
+
                 # Run detection on frame
                 idcard_results = idcard_model.predict(frame, conf=0.5, verbose=False)
-                coco_results = coco_model.predict(frame, conf=0.5, verbose=False)
+                coco_results = []
+                if coco_model is not None:
+                    coco_results = coco_model.predict(frame, conf=0.5, verbose=False)
 
                 # Draw ID card detections
                 for r in idcard_results:
@@ -294,7 +310,9 @@ async def detect(file: UploadFile = File(...), request: Request = None):
 
             # Run models
             idcard_results = idcard_model(save_path, conf=0.5)
-            coco_results = coco_model(save_path, conf=0.5)
+            coco_results = []
+            if coco_model is not None:
+                coco_results = coco_model(save_path, conf=0.5)
 
             # Draw ID card detections
             for r in idcard_results:
@@ -412,7 +430,9 @@ def _run_live_detection(cam_index: int = 0, user_email: str = None):
             break
 
         idcard_results = idcard_model.predict(frame, conf=0.5, verbose=False)
-        coco_results = coco_model.predict(frame, conf=0.5, verbose=False)
+        coco_results = []
+        if coco_model is not None:
+            coco_results = coco_model.predict(frame, conf=0.5, verbose=False)
         
         detected_labels = set()
 
@@ -530,6 +550,9 @@ def _run_live_detection(cam_index: int = 0, user_email: str = None):
 @app.post("/live/start")
 def start_live(request: Request):
     global is_live_running, _live_thread, _live_user_email
+    if not Config.ENABLE_LIVE_DETECTION:
+        logger.warning("Live detection requested but disabled via ENABLE_LIVE_DETECTION=false")
+        raise HTTPException(status_code=503, detail="Live detection is disabled on this deployment")
     if not is_live_running:
         # Get user email for saving snapshots
         user_info = get_user_info_from_cookie(request)

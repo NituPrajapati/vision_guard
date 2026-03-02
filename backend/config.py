@@ -63,3 +63,8 @@ class Config:
     FRONTEND_BASE = os.getenv("FRONTEND_BASE", FRONTEND_BASE_5173)
     GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI") or (FRONTEND_BASE + "/auth/callback")
 
+    # Feature flags / resource controls
+    # Disable the second model or live detection on low‑memory hosts (e.g. Render free tier)
+    ENABLE_COCO_MODEL = os.getenv("ENABLE_COCO_MODEL", "true").lower() == "true"
+    ENABLE_LIVE_DETECTION = os.getenv("ENABLE_LIVE_DETECTION", "true").lower() == "true"
+
