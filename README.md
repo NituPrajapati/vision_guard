@@ -2,6 +2,9 @@
 
 A full-stack object detection application with user authentication, static image detection, live webcam detection, and detection history management.
 
+
+[Watch Video](https://drive.google.com/file/d/1ANygCUdIdvt2hK38ltCahaaIs1NcOqr7/view?usp=sharing)
+
 ## Features
 
 - 🔐 **User Authentication**: Register, login, and secure session management
